@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-3">
+  <h2 class="mb-0">Kulüplerim</h2>
+  <a href="{{ url_for('club_new') }}" class="btn btn-primary">+ Kulüp Oluştur</a>
+</div>
+
+{% if clubs %}
+  <div class="row g-3">
+    {% for c in clubs %}
+      <div class="col-md-6">
+        <div class="card p-3 h-100">
+          <h5 class="mb-1">{{ c.name }}</h5>
+          <div class="muted mb-2">Üye: {{ c.member_count }} · Etkinlik: {{ c.event_count }}</div>
+          <div class="d-flex gap-2">
+            <a href="{{ url_for('club_detail', club_id=c.id) }}" class="btn btn-sm btn-outline-primary">Aç</a>
+            <a href="{{ url_for('club_analytics', club_id=c.id) }}" class="btn btn-sm btn-outline-primary">📊 Analitik</a>
+          </div>
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+{% else %}
+  <div class="card p-4">Henüz kulüp yok. Şimdi bir kulüp oluştur.</div>
+{% endif %}
+{% endblock %}
+

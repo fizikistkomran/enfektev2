@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>{{ club.name }} – Genel Analitik</h2>
+
+<div class="row g-3">
+  <div class="col-md-4">
+    <div class="card p-3">
+      <div>Etkinlik sayısı: <strong>{{ total_events }}</strong></div>
+      <div>Toplam yoklama: <strong>{{ total_checkins }}</strong></div>
+      <div>Farklı katılımcı: <strong>{{ unique_attendees }}</strong></div>
+      <div>2+ kez katılan: <strong>{{ repeaters }}</strong></div>
+      <div>Ortalama tekrar: <strong>{{ "%.1f"|format(avg_retention) }}%</strong></div>
+    </div>
+
+    <div class="card p-3 mt-3">
+      <h5>En aktif katılımcılar</h5>
+      <ul class="m-0 list-unstyled">
+        {% for p in top_participants %}
+        <li class="py-1 d-flex align-items-center">
+          {% if p.avatar_url %}<img src="{{ p.avatar_url }}" class="avatar me-2">{% endif %}
+          <span class="me-auto">{{ p.name }}</span><span class="badge badge-soft">{{ p.count }}</span>
+        </li>
+        {% endfor %}
+      </ul>
+    </div>
+
+    <div class="card p-3 mt-3">
+      <h5>En çok bağ kuranlar</h5>
+      <ul class="m-0 list-unstyled">
+        {% for c in top_connectors %}
+        <li class="py-1 d-flex align-items-center">
+          {% if c.avatar_url %}<img src="{{ c.avatar_url }}" class="avatar me-2">{% endif %}
+          <span class="me-auto">{{ c.name }}</span><span class="badge badge-soft">{{ c.degree }}</span>
+        </li>
+        {% endfor %}
+      </ul>
+    </div>
+  </div>
+
+  <div class="col-md-8">
+    <div class="card p-3">
+      <h5>Etkinlik trendlere göre katılım</h5>
+      <div class="table-responsive">
+        <table class="table table-borderless table-sm align-middle">
+          <thead><tr><th>Etkinlik</th><th>Tarih</th><th>Katılım</th></tr></thead>
+          <tbody>
+          {% for e in trend %}
+            <tr>
+              <td>{{ e.title }}</td>
+              <td class="muted">{{ e.t|ts }}</td>
+              <td><span class="badge badge-soft">{{ e.count }}</span></td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card p-3 mt-3">
+      <h5>Ardışık etkinliklerde tekrar oranı</h5>
+      <div class="table-responsive">
+        <table class="table table-borderless table-sm align-middle">
+          <thead><tr><th>Önceki</th><th>Sonraki</th><th>Her ikisine katılan</th><th>Oran</th></tr></thead>
+          <tbody>
+          {% for p in retention_pairs %}
+            <tr>
+              <td>{{ p.from_title }} ({{ p.from_count }})</td>
+              <td>{{ p.to_title }}</td>
+              <td>{{ p.both_count }}</td>
+              <td>{{ "%.1f"|format(p.rate) }}%</td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card p-3 mt-3">
+      <h5>Katılım ısı haritası (kullanıcı x etkinlik)</h5>
+      <div class="table-responsive">
+        <table class="table table-borderless table-sm align-middle">
+          <thead>
+            <tr>
+              <th>Kullanıcı</th>
+              {% for e in events %}<th class="muted">{{ e.title }}</th>{% endfor %}
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in heatmap_rows %}
+            <tr>
+              <td>
+                {% if r.avatar_url %}<img src="{{ r.avatar_url }}" class="avatar me-1">{% endif %}
+                {{ r.name }}
+              </td>
+              {% for v in r.attends %}
+                <td>{% if v %}✅{% else %}·{% endif %}</td>
+              {% endfor %}
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+</div>
+{% endblock %}
+

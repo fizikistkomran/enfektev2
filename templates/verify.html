@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>EDU e-posta doğrulama</h2>
+<p class="muted">İzinli alanlar: {{ allowed }}</p>
+<form method="post" action="{{ url_for('verify_start') }}" class="row g-2 mt-2" style="max-width:460px">
+  <div class="col-8"><input type="email" class="form-control" name="edu_email" placeholder="ornek@itu.edu.tr" required></div>
+  <div class="col-4 d-grid"><button class="btn btn-primary" type="submit">Doğrulama linki gönder</button></div>
+</form>
+{% endblock %}
+

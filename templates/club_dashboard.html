@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-3">
+  <h2 class="mb-0">{{ club.name }}</h2>
+  <div class="d-flex gap-2">
+    <a href="{{ url_for('club_analytics', club_id=club.id) }}" class="btn btn-outline-primary">📊 Analitik</a>
+    <a href="{{ url_for('community_graph', club_id=club.id) }}" class="btn btn-outline-primary">Ağ</a>
+    <a href="{{ url_for('event_new', club_id=club.id) }}" class="btn btn-primary">+ Etkinlik</a>
+  </div>
+</div>
+
+<div class="row g-3">
+  <div class="col-lg-8">
+    <div class="card p-3">
+      <h5 class="mb-3">Etkinlikler</h5>
+      {% if events %}
+      <div class="table-responsive">
+        <table class="table align-middle table-borderless">
+          <thead>
+            <tr><th>Başlık</th><th>Tarih</th><th>Katılım</th><th class="text-end">Aksiyon</th></tr>
+          </thead>
+          <tbody>
+          {% for e in events %}
+            <tr>
+              <td>{{ e.title }}</td>
+              <td class="muted">{{ (e.starts_at or e.created_at)|ts }}</td>
+              <td><span class="badge badge-soft">{{ e.checkin_count }}</span></td>
+              <td class="text-end">
+                <a class="btn btn-sm btn-outline-primary" href="{{ url_for('event_live', event_id=e.id) }}">QR</a>
+                <a class="btn btn-sm btn-outline-primary" href="{{ url_for('event_analytics', event_id=e.id) }}">Analitik</a>
+                <a class="btn btn-sm btn-outline-primary" href="{{ url_for('event_export_csv', event_id=e.id) }}">CSV</a>
+              </td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+        <div class="muted">Henüz etkinlik yok. Sağ üstten <b>+ Etkinlik</b> oluştur.</div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="col-lg-4">
+    <div class="card p-3 mb-3">
+      <h5>Üyeler</h5>
+      <ul class="list-unstyled m-0">
+        {% for m in members %}
+          <li class="py-2 border-bottom border-dark-subtle">
+            <div class="d-flex align-items-center gap-2">
+              {% if m.avatar_url %}<img src="{{ m.avatar_url }}" class="avatar">{% endif %}
+              <div class="me-auto">
+                <div>{{ m.name }} {% if m.id == user.id %}<span class="badge badge-soft">sen</span>{% endif %}</div>
+                <div class="muted" style="font-size:12px">{{ m.role }}</div>
+              </div>
+
+              {# İLİŞKİ DURUMU UI #}
+              {% if m.id != user.id %}
+                {% if m.relation_status == 'accepted' %}
+                  <span class="badge badge-soft">bağlı</span>
+
+                {% elif m.they_sent_pending %}
+                  <form method="post" action="{{ url_for('connect_accept', club_id=club.id) }}" class="d-inline">
+                    <input type="hidden" name="from_id" value="{{ m.id }}">
+                    <button class="btn btn-sm btn-primary">Kabul et</button>
+                  </form>
+                  <form method="post" action="{{ url_for('connect_reject', club_id=club.id) }}" class="d-inline">
+                    <input type="hidden" name="from_id" value="{{ m.id }}">
+                    <button class="btn btn-sm btn-outline-primary">Reddet</button>
+                  </form>
+
+                {% elif m.i_sent_pending %}
+                  <span class="badge badge-soft me-1">bekliyor</span>
+                  <form method="post" action="{{ url_for('connect_cancel', club_id=club.id) }}" class="d-inline">
+                    <input type="hidden" name="to_id" value="{{ m.id }}">
+                    <button class="btn btn-sm btn-outline-primary">İptal</button>
+                  </form>
+
+                {% else %}
+                  <form method="post" action="{{ url_for('connect_send', club_id=club.id, target_id=m.id) }}" class="d-inline">
+                    <button class="btn btn-sm btn-outline-primary">Tanıyorum</button>
+                  </form>
+                {% endif %}
+              {% endif %}
+            </div>
+          </li>
+        {% endfor %}
+      </ul>
+    </div>
+
+    <div class="card p-3">
+      <h5>Bekleyen Bağ İstekleri</h5>
+      {% if incoming and incoming|length %}
+        {% for req in incoming %}
+          <form method="post" action="{{ url_for('connect_accept', club_id=club.id) }}" class="d-flex align-items-center gap-2 mb-2">
+            {% if req.avatar_url %}<img src="{{ req.avatar_url }}" class="avatar">{% endif %}
+            <span class="me-auto">{{ req.name }}</span>
+            <input type="hidden" name="from_id" value="{{ req.src_user_id }}">
+            <button class="btn btn-sm btn-primary">Kabul</button>
+          </form>
+          <form method="post" action="{{ url_for('connect_reject', club_id=club.id) }}" class="d-flex align-items-center gap-2 mb-2">
+            <span class="ms-5"></span>
+            <input type="hidden" name="from_id" value="{{ req.src_user_id }}">
+            <button class="btn btn-sm btn-outline-primary">Reddet</button>
+          </form>
+        {% endfor %}
+      {% else %}
+        <div class="muted">Bekleyen istek yok.</div>
+      {% endif %}
+    </div>
+
+    <div class="d-grid mt-3">
+      <a class="btn btn-outline-primary" href="{{ url_for('community_graph', club_id=club.id) }}">Ağı Görüntüle</a>
+    </div>
+  </div>
+</div>
+{% endblock %}
+

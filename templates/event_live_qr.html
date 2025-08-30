@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>{{ event.title }} — Canlı Yoklama</h2>
+
+<div class="row g-3">
+  <div class="col-md-5">
+    <div class="card p-3">
+      <img src="{{ url_for('event_qr_png', event_id=event.id) }}" class="w-100" alt="QR">
+      <div class="muted mt-2">Katılımcılar bu QR’ı okutarak yoklamaya eklenir.</div>
+    </div>
+  </div>
+  <div class="col-md-7">
+    <div class="card p-3">
+      <h5>Detay</h5>
+      <div class="mb-2">Kulüp: <strong>{{ club.name }}</strong></div>
+      <div class="mb-2">Başlangıç: {{ (event.starts_at or event.created_at)|ts }}</div>
+      <div class="mb-2">Şu ana kadar: <span class="badge badge-soft">{{ count }}</span> kişi</div>
+      <div class="d-flex gap-2 mt-2">
+        <a class="btn btn-outline-primary" href="{{ url_for('club_detail', club_id=club.id) }}">Kulüp Sayfası</a>
+        <a class="btn btn-outline-primary" href="{{ url_for('event_analytics', event_id=event.id) }}">Analitik</a>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+

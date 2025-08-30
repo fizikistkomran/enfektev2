@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Yeni Kulüp</h2>
+<form method="post" action="{{ url_for('club_new_post') }}" style="max-width:520px">
+  <div class="mb-3">
+    <label class="form-label">Kulüp Adı</label>
+    <input type="text" class="form-control" name="name" required>
+  </div>
+  <button class="btn btn-primary">Oluştur</button>
+</form>
+{% endblock %}
+

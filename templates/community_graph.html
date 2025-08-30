@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Kulüp Ağı</h2>
+<div id="network" style="height:70vh; background:#101522; border:1px solid #1c2233; border-radius:10px;"></div>
+{% endblock %}
+{% block scripts %}
+<script src="https://unpkg.com/vis-network@9.1.2/dist/vis-network.min.js"></script>
+<script>
+(async function(){
+  const res = await fetch("{{ url_for('club_graph_json', club_id=club_id) }}", {credentials:'same-origin'});
+  const data = await res.json();
+  const nodes = new vis.DataSet((data.nodes||[]).map(n => ({ id:n.id, label:n.label })));
+  const edges = new vis.DataSet((data.edges||[]).map(e => ({ from:e.source, to:e.target })));
+  const container = document.getElementById('network');
+  const network = new vis.Network(container, {nodes, edges}, {
+    nodes: { shape:'dot', size: 10, color:'#4f7cff' },
+    edges: { color: { color:'#2a3550' } },
+    physics: { stabilization: true }
+  });
+})();
+</script>
+{% endblock %}
+

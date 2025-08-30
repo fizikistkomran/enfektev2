@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>{{ event.title }} – Analitik</h2>
+<div class="row g-3">
+  <div class="col-md-4">
+    <div class="card p-3">
+      <div>Toplam katılım: <strong>{{ total_att }}</strong></div>
+      <div>Üye sayısı: <strong>{{ member_count }}</strong></div>
+      <div>Katılım oranı: <strong>{{ "%.1f"|format(att_rate) }}%</strong></div>
+      <div>EDU doğrulamalı: <strong>{{ edu_verified }}</strong></div>
+      <div>Sonraki etkinliğe devam: <strong>{{ continued }}</strong> ({{ "%.1f"|format(cont_rate) }}%)</div>
+      <div>Etkinlik sonrası yeni bağlantılar: <strong>{{ new_edges_after }}</strong></div>
+      <a class="btn btn-sm btn-outline-primary mt-2" href="{{ url_for('event_export_csv', event_id=event.id) }}">CSV indir</a>
+    </div>
+  </div>
+  <div class="col-md-8">
+    <div class="card p-3">
+      <h5>Katılımcılar</h5>
+      <div class="table-responsive">
+        <table class="table table-borderless table-sm align-middle">
+          <thead><tr><th>Ad</th><th>EDU</th><th>Yoklama</th></tr></thead>
+          <tbody>
+            {% for a in attendees %}
+              <tr>
+                <td>
+                  {% if a.avatar_url %}<img src="{{ a.avatar_url }}" class="avatar me-2">{% endif %}
+                  {{ a.name }}
+                </td>
+                <td class="muted">{{ a.edu_email or "-" }}</td>
+                <td class="muted">{{ a.checked_at|ts }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
