@@ -1,13 +1,8 @@
 # app.py
 from __future__ import annotations
 import os
-import re
-import json
-import time
-import hmac
-import base64
-import hashlib
 import secrets
+import time
 from datetime import datetime, timezone
 from urllib.parse import urlencode
 
@@ -17,15 +12,13 @@ from flask import (
     render_template, abort, jsonify, make_response, flash
 )
 from sqlalchemy import (
-    create_engine, func, select, text, String, Integer, DateTime, Boolean,
+    create_engine, func, select, String, Integer, DateTime, Boolean,
     ForeignKey, UniqueConstraint, and_, or_
 )
-from sqlalchemy.orm import (
-    DeclarativeBase, Mapped, mapped_column, relationship, Session
-)
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, Session
 
 # -------------------------
-# Config / App Factory
+# Utils
 # -------------------------
 def env_bool(name: str, default: bool = False) -> bool:
     v = os.getenv(name)
@@ -36,6 +29,9 @@ def env_bool(name: str, default: bool = False) -> bool:
 def now_utc() -> datetime:
     return datetime.now(timezone.utc)
 
+# -------------------------
+# ORM
+# -------------------------
 class Base(DeclarativeBase):
     pass
 
@@ -105,43 +101,37 @@ class Checkin(Base):
 class Connection(Base):
     __tablename__ = "connections"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    a_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)  # requester
-    b_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)  # target
-    status: Mapped[str] = mapped_column(String(20), default="pending")  # pending | accepted
+    a_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    b_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    status: Mapped[str] = mapped_column(String(20), default="pending")  # pending|accepted
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
     __table_args__ = (UniqueConstraint("a_id", "b_id", name="uq_conn_pair"),)
 
     a: Mapped[User] = relationship(foreign_keys=[a_id], back_populates="sent_connections")
     b: Mapped[User] = relationship(foreign_keys=[b_id], back_populates="received_connections")
 
-
+# -------------------------
+# App factory
+# -------------------------
 def create_app() -> Flask:
     app = Flask(__name__, static_folder="static", template_folder="templates")
     app.secret_key = os.getenv("SECRET_KEY", secrets.token_hex(16))
 
-    # ENV
     app.config["HOST_URL"] = os.getenv("HOST_URL", "http://localhost:8000").rstrip("/")
     app.config["VERIFY_SSL"] = env_bool("VERIFY_SSL", True)
     app.config["EDU_ALLOWED_DOMAINS"] = [d.strip().lower() for d in os.getenv("EDU_ALLOWED_DOMAINS", "").split(",") if d.strip()]
     app.config["FLASK_ENV"] = os.getenv("FLASK_ENV", "production")
 
-    # DB engine
+    # DB
     db_url = os.getenv("DATABASE_URL", "sqlite:///enfekte.db")
-    # SQLAlchemy engine
     engine = create_engine(db_url, pool_pre_ping=True)
-    app.engine = engine  # attach for usage
-
-    # Create tables portable (SQLite/Postgres)
+    app.engine = engine
     Base.metadata.create_all(engine)
 
-    # -------------------------
     # Helpers
-    # -------------------------
-    def current_user(session_db: Session) -> User | None:
+    def current_user(db: Session) -> User | None:
         uid = session.get("uid")
-        if not uid:
-            return None
-        return session_db.get(User, uid)
+        return db.get(User, uid) if uid else None
 
     def require_login():
         if not session.get("uid"):
@@ -152,33 +142,40 @@ def create_app() -> Flask:
             return False
         if not app.config["EDU_ALLOWED_DOMAINS"]:
             return True
-        try:
-            domain = email.split("@", 1)[1].lower()
-        except Exception:
-            return False
+        domain = (email.split("@", 1)[1] if "@" in email else "").lower()
         return any(domain == d or domain.endswith("." + d) for d in app.config["EDU_ALLOWED_DOMAINS"])
 
-    # -------------------------
-    # Index / Health
-    # -------------------------
+    # Health
     @app.get("/health")
     def health():
         return jsonify(ok=True, ts=int(time.time()))
 
+    # ---------- HARDENED INDEX (fallback ile) ----------
     @app.get("/")
     def index():
+        # Şablon varsa onu göster, hata olursa her koşulda minimal HTML dön
         try:
             return render_template("index.html")
         except Exception:
-            return jsonify({
-                "message": "enfekte.co",
-                "actions": {
-                    "linkedin_login": url_for("li_login", _external=True),
-                }
-            })
+            html = f"""<!doctype html><meta charset="utf-8">
+<title>enfekte.co</title>
+<link rel="icon" href="data:,">
+<style>
+  body{{font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Helvetica,Arial,sans-serif;background:#0b1220;color:#eef;}}
+  .card{{max-width:760px;margin:48px auto;background:#111826;border:1px solid #223047;border-radius:14px;padding:28px;box-shadow:0 6px 24px rgba(0,0,0,.35)}}
+  a.btn{{display:inline-block;padding:12px 16px;border-radius:8px;background:#0A66C2;color:#fff;text-decoration:none;font-weight:600}}
+  .muted{{color:#aab}}
+</style>
+<div class="card">
+  <h1>Merhaba 👋</h1>
+  <p class="muted">İTÜ kulüpleri için yoklama, topluluk ağı ve analitik.</p>
+  <p><a class="btn" href="/auth/linkedin/login">LinkedIn ile giriş yap</a></p>
+  <p class="muted">Health: <a class="muted" href="/health">/health</a></p>
+</div>"""
+            return make_response(html, 200)
 
     # -------------------------
-    # LinkedIn OIDC Login
+    # LinkedIn OIDC
     # -------------------------
     LI_AUTH = "https://www.linkedin.com/oauth/v2/authorization"
     LI_TOKEN = "https://www.linkedin.com/oauth/v2/accessToken"
@@ -189,8 +186,8 @@ def create_app() -> Flask:
 
     @app.get("/auth/linkedin/login")
     def li_login():
-        client_id = os.getenv("LINKEDIN_CLIENT_ID")
-        if not client_id:
+        cid = os.getenv("LINKEDIN_CLIENT_ID")
+        if not cid:
             return "LinkedIn client id missing", 500
         state = secrets.token_urlsafe(16)
         nonce = secrets.token_urlsafe(16)
@@ -198,7 +195,7 @@ def create_app() -> Flask:
         session["li_nonce"] = nonce
         params = {
             "response_type": "code",
-            "client_id": client_id,
+            "client_id": cid,
             "redirect_uri": make_redirect_uri(),
             "scope": "openid profile email",
             "state": state,
@@ -215,15 +212,10 @@ def create_app() -> Flask:
 
         code = request.args.get("code")
         state = request.args.get("state")
-        if not code or not state:
+        if not code or not state or state != session.get("li_state"):
             flash("Invalid callback", "error")
             return redirect(url_for("index"))
 
-        if state != session.get("li_state"):
-            flash("State mismatch", "error")
-            return redirect(url_for("index"))
-
-        # Exchange code
         data = {
             "grant_type": "authorization_code",
             "code": code,
@@ -244,7 +236,6 @@ def create_app() -> Flask:
             flash("Missing access_token", "error")
             return redirect(url_for("index"))
 
-        # Get userinfo
         headers = {"Authorization": f"Bearer {access_token}"}
         userinfo = None
         try:
@@ -254,7 +245,6 @@ def create_app() -> Flask:
         except Exception:
             userinfo = None
 
-        # Fallback to v2 endpoints (public profile/email) if needed
         if not userinfo:
             try:
                 me = requests.get(
@@ -281,7 +271,6 @@ def create_app() -> Flask:
                     try:
                         pics = me_j["profilePicture"]["displayImage~"]["elements"]
                         if pics:
-                            # pick highest
                             pic = pics[-1]["identifiers"][0]["identifier"]
                     except Exception:
                         pass
@@ -298,7 +287,6 @@ def create_app() -> Flask:
             flash("LinkedIn userinfo failed", "error")
             return redirect(url_for("index"))
 
-        # Persist / login
         with Session(app.engine) as db:
             li_id = str(userinfo.get("sub") or userinfo.get("id") or "")
             name = (userinfo.get("name") or "").strip() or "LinkedIn User"
@@ -318,7 +306,6 @@ def create_app() -> Flask:
                     user.email = email
                 if avatar:
                     user.avatar_url = avatar
-            # EDU verify fast-path
             if email and allowed_edu(email):
                 user.edu_verified = True
             db.commit()
@@ -327,7 +314,7 @@ def create_app() -> Flask:
         return redirect(url_for("home"))
 
     # -------------------------
-    # Core pages
+    # Views
     # -------------------------
     @app.get("/home")
     def home():
@@ -337,7 +324,7 @@ def create_app() -> Flask:
             my_clubs = db.scalars(select(Club).join(Membership).where(Membership.user_id == user.id)).all()
             owned = db.scalars(select(Club).where(Club.owner_id == user.id)).all()
             try:
-                return render_template("home.html", user=user, my_clubs=my_clubs, owned_clubs=owned)
+                return render_template("dashboard.html", user=user, my_clubs=my_clubs, owned_clubs=owned)
             except Exception:
                 return jsonify({
                     "user": {"id": user.id, "name": user.name, "email": user.email, "edu_verified": user.edu_verified},
@@ -345,9 +332,7 @@ def create_app() -> Flask:
                     "owned_clubs": [{"id": c.id, "name": c.name} for c in owned],
                 })
 
-    # -------------------------
-    # Clubs / Events
-    # -------------------------
+    # Clubs
     @app.post("/clubs")
     def create_club():
         require_login()
@@ -375,7 +360,7 @@ def create_app() -> Flask:
             members = db.scalars(select(User).join(Membership).where(Membership.club_id == club_id)).all()
             events = db.scalars(select(Event).where(Event.club_id == club_id).order_by(Event.starts_at.desc())).all()
             try:
-                return render_template("club_new.html", club=club, members=members, events=events)
+                return render_template("club_dashboard.html", club=club, members=members, events=events)
             except Exception:
                 return jsonify({
                     "club": {"id": club.id, "name": club.name, "description": club.description},
@@ -390,12 +375,12 @@ def create_app() -> Flask:
             user = current_user(db)
             if not db.get(Club, club_id):
                 abort(404)
-            exists = db.get(Membership, {"user_id": user.id, "club_id": club_id})
-            if not exists:
+            if not db.get(Membership, {"user_id": user.id, "club_id": club_id}):
                 db.add(Membership(user_id=user.id, club_id=club_id, role="member"))
                 db.commit()
             return jsonify({"ok": True})
 
+    # Events
     @app.post("/clubs/<int:club_id>/events")
     def create_event(club_id: int):
         require_login()
@@ -405,25 +390,23 @@ def create_app() -> Flask:
         if not title or not starts_at_str:
             return jsonify({"error": "title and starts_at required"}), 400
         try:
-            starts_at = datetime.fromisoformat(starts_at_str)
-            if starts_at.tzinfo is None:
-                starts_at = starts_at.replace(tzinfo=timezone.utc)
+            dt = datetime.fromisoformat(starts_at_str)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
         except Exception:
             return jsonify({"error": "invalid starts_at"}), 400
         with Session(app.engine) as db:
-            user = current_user(db)
+            me = current_user(db)
             club = db.get(Club, club_id)
-            if not club or club.owner_id != user.id:
+            if not club or club.owner_id != me.id:
                 return jsonify({"error": "only owner can create events"}), 403
             qr_secret = secrets.token_urlsafe(18)
-            ev = Event(club_id=club_id, title=title, starts_at=starts_at, qr_secret=qr_secret)
+            ev = Event(club_id=club_id, title=title, starts_at=dt, qr_secret=qr_secret)
             db.add(ev)
             db.commit()
             return jsonify({"ok": True, "event_id": ev.id})
 
-    # -------------------------
     # QR & Check-in
-    # -------------------------
     @app.get("/events/<int:event_id>/qr.png")
     def event_qr(event_id: int):
         from io import BytesIO
@@ -452,22 +435,16 @@ def create_app() -> Flask:
             ev = db.get(Event, e)
             if not ev or ev.qr_secret != q:
                 return "Invalid QR", 400
-            user = current_user(db)
-            # ensure membership
-            mem = db.get(Membership, {"user_id": user.id, "club_id": ev.club_id})
-            if not mem:
-                db.add(Membership(user_id=user.id, club_id=ev.club_id, role="member"))
+            me = current_user(db)
+            if not db.get(Membership, {"user_id": me.id, "club_id": ev.club_id}):
+                db.add(Membership(user_id=me.id, club_id=ev.club_id, role="member"))
                 db.flush()
-            # checkin (on conflict ignore)
-            exists = db.scalar(select(Checkin.id).where(Checkin.event_id == e, Checkin.user_id == user.id))
-            if not exists:
-                db.add(Checkin(event_id=e, user_id=user.id))
+            if not db.scalar(select(Checkin.id).where(Checkin.event_id == e, Checkin.user_id == me.id)):
+                db.add(Checkin(event_id=e, user_id=me.id))
                 db.commit()
             return redirect(url_for("club_page", club_id=ev.club_id))
 
-    # -------------------------
-    # Connections (Request / Accept)
-    # -------------------------
+    # Connections
     @app.post("/connect/request/<int:target_id>")
     def connect_request(target_id: int):
         require_login()
@@ -475,7 +452,6 @@ def create_app() -> Flask:
             me = current_user(db)
             if me.id == target_id:
                 return jsonify({"error": "cannot connect to self"}), 400
-            # normalize pair order? we keep directed request (a=me,b=target)
             existing = db.scalar(select(Connection).where(
                 or_(
                     and_(Connection.a_id == me.id, Connection.b_id == target_id),
@@ -485,8 +461,7 @@ def create_app() -> Flask:
             if existing:
                 return jsonify({"ok": True, "status": existing.status, "connection_id": existing.id})
             c = Connection(a_id=me.id, b_id=target_id, status="pending")
-            db.add(c)
-            db.commit()
+            db.add(c); db.commit()
             return jsonify({"ok": True, "connection_id": c.id, "status": "pending"})
 
     @app.post("/connect/accept/<int:connection_id>")
@@ -499,38 +474,29 @@ def create_app() -> Flask:
                 abort(404)
             if c.b_id != me.id:
                 return jsonify({"error": "not your request"}), 403
-            c.status = "accepted"
-            db.commit()
+            c.status = "accepted"; db.commit()
             return jsonify({"ok": True})
 
-    # -------------------------
-    # Community Graph (club)
-    # -------------------------
+    # Graph & Analytics
     @app.get("/clubs/<int:club_id>/graph.json")
     def club_graph_json(club_id: int):
         require_login()
         with Session(app.engine) as db:
-            # nodes: all club members
             members = db.scalars(select(User).join(Membership).where(Membership.club_id == club_id)).all()
             ids = [m.id for m in members]
-            # edges: accepted connections where both ends in the club
             edges = []
             if ids:
-                # both directions accepted treated as one undirected edge
-                conns = db.scalars(
-                    select(Connection).where(
-                        Connection.status == "accepted",
-                        Connection.a_id.in_(ids),
-                        Connection.b_id.in_(ids),
-                    )
-                ).all()
+                conns = db.scalars(select(Connection).where(
+                    Connection.status == "accepted",
+                    Connection.a_id.in_(ids),
+                    Connection.b_id.in_(ids),
+                )).all()
                 for c in conns:
                     edges.append({"source": c.a_id, "target": c.b_id})
-            data = {
+            return jsonify({
                 "nodes": [{"id": u.id, "name": u.name, "avatar": u.avatar_url} for u in members],
                 "links": edges,
-            }
-            return jsonify(data)
+            })
 
     @app.get("/clubs/<int:club_id>/graph")
     def club_graph_page(club_id: int):
@@ -540,9 +506,6 @@ def create_app() -> Flask:
         except Exception:
             return redirect(url_for("club_graph_json", club_id=club_id))
 
-    # -------------------------
-    # Analytics
-    # -------------------------
     @app.get("/events/<int:event_id>/analytics")
     def event_analytics(event_id: int):
         require_login()
@@ -550,29 +513,18 @@ def create_app() -> Flask:
             ev = db.get(Event, event_id)
             if not ev:
                 abort(404)
-            # total attendees
             total = db.scalar(select(func.count()).select_from(Checkin).where(Checkin.event_id == event_id)) or 0
-
-            # find next event of same club (by time)
-            next_ev = db.scalar(
-                select(Event.id).where(Event.club_id == ev.club_id, Event.starts_at > ev.starts_at).order_by(Event.starts_at.asc())
-            )
-            continued_count = 0
+            next_ev = db.scalar(select(Event.id).where(Event.club_id == ev.club_id, Event.starts_at > ev.starts_at).order_by(Event.starts_at.asc()))
+            continued = 0
             if next_ev:
                 uids = db.scalars(select(Checkin.user_id).where(Checkin.event_id == event_id)).all()
                 if uids:
-                    continued_count = db.scalar(
-                        select(func.count()).select_from(Checkin).where(
-                            Checkin.event_id == next_ev, Checkin.user_id.in_(uids)
-                        )
-                    ) or 0
-
-            data = {
+                    continued = db.scalar(select(func.count()).select_from(Checkin).where(Checkin.event_id == next_ev, Checkin.user_id.in_(uids))) or 0
+            return jsonify({
                 "event": {"id": ev.id, "title": ev.title, "starts_at": ev.starts_at.isoformat()},
                 "attendees": total,
-                "continued_to_next": continued_count,
-            }
-            return jsonify(data)
+                "continued_to_next": continued,
+            })
 
     @app.get("/clubs/<int:club_id>/analytics")
     def club_analytics(club_id: int):
@@ -581,29 +533,20 @@ def create_app() -> Flask:
             club = db.get(Club, club_id)
             if not club:
                 abort(404)
-
-            # events
-            evs = db.scalars(select(Event.id, Event.starts_at).where(Event.club_id == club_id).order_by(Event.starts_at.asc())).all()
+            evs = db.execute(select(Event.id, Event.starts_at).where(Event.club_id == club_id).order_by(Event.starts_at.asc())).all()
             event_ids = [e[0] for e in evs]
-            # attendees per event
             per_event = {}
             if event_ids:
                 rows = db.execute(
-                    select(Checkin.event_id, func.count())
-                    .where(Checkin.event_id.in_(event_ids))
-                    .group_by(Checkin.event_id)
+                    select(Checkin.event_id, func.count()).where(Checkin.event_id.in_(event_ids)).group_by(Checkin.event_id)
                 ).all()
                 for eid, cnt in rows:
                     per_event[eid] = int(cnt)
-
-            # active members (any checkin)
             active_user_ids = []
             if event_ids:
                 active_user_ids = [r[0] for r in db.execute(
                     select(Checkin.user_id).where(Checkin.event_id.in_(event_ids)).group_by(Checkin.user_id)
                 ).all()]
-
-            # last activity per user
             last_activity = {}
             if active_user_ids:
                 rows = db.execute(
@@ -612,24 +555,19 @@ def create_app() -> Flask:
                     .group_by(Checkin.user_id)
                 ).all()
                 for uid, ts in rows:
-                    last_activity[uid] = ts.isoformat() if isinstance(ts, datetime) else str(ts)
-
-            # assemble
-            out = {
+                    last_activity[uid] = (ts.isoformat() if isinstance(ts, datetime) else str(ts))
+            return jsonify({
                 "club": {"id": club.id, "name": club.name},
                 "events": [{"id": eid, "starts_at": sa.isoformat(), "attendees": per_event.get(eid, 0)} for eid, sa in evs],
                 "active_members": len(active_user_ids),
                 "last_activity": last_activity,
-            }
-            return jsonify(out)
+            })
 
-    # -------------------------
-    # Simple views
-    # -------------------------
+    # Login/Logout pages minimal
     @app.get("/login")
     def login_page():
         try:
-            return render_template("login.html")
+            return render_template("verify.html")
         except Exception:
             return redirect(url_for("li_login"))
 
@@ -638,8 +576,23 @@ def create_app() -> Flask:
         session.clear()
         return redirect(url_for("index"))
 
-    return app
+    # --------- Genel hata yakalayıcı (görsel 500 yerine min HTML) ----------
+    @app.errorhandler(Exception)
+    def on_error(e):
+        # Health/metrics uçlarını bozma
+        if request.path.startswith("/health"):
+            return jsonify(ok=False, error=str(e)), 500
+        # Prod’da minimal, güvenli mesaj
+        return make_response(
+            """<!doctype html><meta charset="utf-8"><title>Hata</title>
+            <div style="font-family:system-ui;background:#0b1220;color:#eef;padding:24px">
+            <h2>Bir hata oluştu</h2>
+            <p>Lütfen tekrar deneyin.</p>
+            <p><a href="/">Ana sayfa</a></p></div>""",
+            500,
+        )
 
+    return app
 
 app = create_app()
 
