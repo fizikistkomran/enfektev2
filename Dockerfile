@@ -5,12 +5,17 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1
 
 WORKDIR /app
+
+# Bağımlılıkları kur
 COPY requirements.txt .
-RUN pip install -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
 
+# Uygulamayı kopyala
 COPY . .
-EXPOSE 8080
-ENV PORT=8080
 
-CMD ["gunicorn", "app:app", "--bind", "0.0.0.0:8080", "--workers", "2", "--threads", "8", "--timeout", "120"]
+# Railway $PORT verir; yoksa local için 8080
+ENV PORT=${PORT:-8080}
+
+# Sağlıklı başlatma: $PORT'a bind et
+CMD bash -lc "gunicorn app:app --bind 0.0.0.0:${PORT} --workers 1 --threads 8 --timeout 180 --log-level debug"
 
