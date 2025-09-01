@@ -8,11 +8,14 @@ timeout = 180
 worker_class = "gthread"
 loglevel = "debug"
 
-# proxy header'ları (Railway için güvenli)
-forwarded_allow_ips = "*"
+# Reverse proxy ayarları
+forwarded_allow_ips = "*"   # string!
 secure_scheme_headers = {
     "X-FORWARDED-PROTOCOL": "ssl",
     "X-FORWARDED-PROTO": "https",
     "X-FORWARDED-SSL": "on",
 }
+
+# Teşhis için access log'u aç
+accesslog = "-"             # stdout'a yazsın
 
