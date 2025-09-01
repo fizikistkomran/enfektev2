@@ -1,4 +1,3 @@
-# app.py
 from __future__ import annotations
 import os
 import secrets
@@ -18,7 +17,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, Session
 
 # -------------------------
-# Utils
+# Helpers
 # -------------------------
 def env_bool(name: str, default: bool = False) -> bool:
     v = os.getenv(name)
@@ -128,7 +127,16 @@ def create_app() -> Flask:
     app.engine = engine
     Base.metadata.create_all(engine)
 
-    # Helpers
+    # ---- Teşhis endpointleri
+    @app.get("/__ping")
+    def __ping():
+        return "PONG", 200
+
+    @app.get("/health")
+    def health():
+        return jsonify(ok=True, ts=int(time.time()))
+
+    # ---- küçük yardımcılar
     def current_user(db: Session) -> User | None:
         uid = session.get("uid")
         return db.get(User, uid) if uid else None
@@ -145,15 +153,9 @@ def create_app() -> Flask:
         domain = (email.split("@", 1)[1] if "@" in email else "").lower()
         return any(domain == d or domain.endswith("." + d) for d in app.config["EDU_ALLOWED_DOMAINS"])
 
-    # Health
-    @app.get("/health")
-    def health():
-        return jsonify(ok=True, ts=int(time.time()))
-
-    # ---------- HARDENED INDEX (fallback ile) ----------
+    # ---------- INDEX (şablon bozulsa bile fallback var) ----------
     @app.get("/")
     def index():
-        # Şablon varsa onu göster, hata olursa her koşulda minimal HTML dön
         try:
             return render_template("index.html")
         except Exception:
@@ -170,7 +172,7 @@ def create_app() -> Flask:
   <h1>Merhaba 👋</h1>
   <p class="muted">İTÜ kulüpleri için yoklama, topluluk ağı ve analitik.</p>
   <p><a class="btn" href="/auth/linkedin/login">LinkedIn ile giriş yap</a></p>
-  <p class="muted">Health: <a class="muted" href="/health">/health</a></p>
+  <p class="muted">Health: <a class="muted" href="/health">/health</a>, Ping: <a class="muted" href="/__ping">/__ping</a></p>
 </div>"""
             return make_response(html, 200)
 
@@ -314,7 +316,7 @@ def create_app() -> Flask:
         return redirect(url_for("home"))
 
     # -------------------------
-    # Views
+    # Views / Data
     # -------------------------
     @app.get("/home")
     def home():
@@ -332,7 +334,6 @@ def create_app() -> Flask:
                     "owned_clubs": [{"id": c.id, "name": c.name} for c in owned],
                 })
 
-    # Clubs
     @app.post("/clubs")
     def create_club():
         require_login()
@@ -380,7 +381,6 @@ def create_app() -> Flask:
                 db.commit()
             return jsonify({"ok": True})
 
-    # Events
     @app.post("/clubs/<int:club_id>/events")
     def create_event(club_id: int):
         require_login()
@@ -406,7 +406,6 @@ def create_app() -> Flask:
             db.commit()
             return jsonify({"ok": True, "event_id": ev.id})
 
-    # QR & Check-in
     @app.get("/events/<int:event_id>/qr.png")
     def event_qr(event_id: int):
         from io import BytesIO
@@ -444,7 +443,6 @@ def create_app() -> Flask:
                 db.commit()
             return redirect(url_for("club_page", club_id=ev.club_id))
 
-    # Connections
     @app.post("/connect/request/<int:target_id>")
     def connect_request(target_id: int):
         require_login()
@@ -477,7 +475,6 @@ def create_app() -> Flask:
             c.status = "accepted"; db.commit()
             return jsonify({"ok": True})
 
-    # Graph & Analytics
     @app.get("/clubs/<int:club_id>/graph.json")
     def club_graph_json(club_id: int):
         require_login()
@@ -563,7 +560,6 @@ def create_app() -> Flask:
                 "last_activity": last_activity,
             })
 
-    # Login/Logout pages minimal
     @app.get("/login")
     def login_page():
         try:
@@ -576,13 +572,11 @@ def create_app() -> Flask:
         session.clear()
         return redirect(url_for("index"))
 
-    # --------- Genel hata yakalayıcı (görsel 500 yerine min HTML) ----------
+    # --------- Genel hata yakalayıcı ----------
     @app.errorhandler(Exception)
     def on_error(e):
-        # Health/metrics uçlarını bozma
-        if request.path.startswith("/health"):
+        if request.path.startswith("/health") or request.path.startswith("/__ping"):
             return jsonify(ok=False, error=str(e)), 500
-        # Prod’da minimal, güvenli mesaj
         return make_response(
             """<!doctype html><meta charset="utf-8"><title>Hata</title>
             <div style="font-family:system-ui;background:#0b1220;color:#eef;padding:24px">
