@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Etkinlik Oluştur</h2>
+<form method="post" action="" style="max-width:520px">
+  <div class="mb-3">
+    <label class="form-label">Başlık</label>
+    <input type="text" class="form-control" name="title" required>
+  </div>
+  <div class="row g-2">
+    <div class="col-md-6">
+      <label class="form-label">Başlangıç</label>
+      <input type="datetime-local" class="form-control" name="starts_at">
+    </div>
+    <div class="col-md-6">
+      <label class="form-label">Bitiş</label>
+      <input type="datetime-local" class="form-control" name="ends_at">
+    </div>
+  </div>
+  <button class="btn btn-primary mt-3">Oluştur</button>
+</form>
+{% endblock %}
+

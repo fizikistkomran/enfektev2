@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block content %}
+
+<section class="hero mb-4">
+  <div class="row g-4 align-items-center">
+    <div class="col-lg-7">
+      <h1 class="title-xl mb-2">İTÜ kulüpleri için <span class="text-info">QR yoklama</span> ve <span class="text-success">topluluk ağı</span>.</h1>
+      <p class="lead-lg mb-3">
+        Toplantıda tek QR’ı aç, katılanlar otomatik yoklamaya düşsün. LinkedIn ile giriş ve EDU doğrulama sayesinde
+        güvenli kimlik; “tanıyorum” bağlantıları ve <em>Have you met…?</em> önerileriyle güçlü bir ağ.
+      </p>
+      <div class="d-flex flex-wrap cta-gap">
+        <a href="{{ url_for('li_login') }}" class="btn btn-lg btn-primary">LinkedIn ile devam et</a>
+        <a href="{{ url_for('dashboard') }}" class="btn btn-lg btn-outline-primary">Paneli gör</a>
+      </div>
+      <p class="muted mt-2 mb-0"><small>Yalnızca temel profil/e-posta izinleri alınır. EDU e-posta doğrulaması gerekir.</small></p>
+    </div>
+    <div class="col-lg-5">
+      <div class="card p-3">
+        <div class="d-flex align-items-center justify-content-between mb-2">
+          <strong>Canlı Yoklama</strong>
+          <span class="badge badge-soft">Demo</span>
+        </div>
+        <div class="ratio ratio-16x9 bg-dark rounded" style="border:1px dashed #2a3550; display:grid; place-items:center;">
+          <div class="text-center muted">
+            <div class="mb-1">QR • Etkinlik #42</div>
+            <div style="font-size:12px">Katılan: 37</div>
+          </div>
+        </div>
+        <div class="mt-2 d-flex gap-2">
+          <span class="badge badge-soft">EDU doğrulamalı</span>
+          <span class="badge badge-soft">LinkedIn</span>
+          <span class="badge badge-soft">Graph</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="row g-3">
+  <div class="col-md-4">
+    <div class="card p-3 h-100">
+      <div class="d-flex align-items-center gap-2 mb-2"><span>📷</span><h5 class="m-0">QR ile yoklama</h5></div>
+      <p class="muted mb-0">Tek QR kodu, herkesin telefonu. Anında katılım listesi; CSV dışa aktarım.</p>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="card p-3 h-100">
+      <div class="d-flex align-items-center gap-2 mb-2"><span>🔐</span><h5 class="m-0">LinkedIn + EDU</h5></div>
+      <p class="muted mb-0">LinkedIn ile kimlik, EDU e-posta ile doğrulama. Kulüp özelinde güvenli erişim.</p>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="card p-3 h-100">
+      <div class="d-flex align-items-center gap-2 mb-2"><span>🕸️</span><h5 class="m-0">Ağ & Ice-breaker</h5></div>
+      <p class="muted mb-0">“Tanıyorum” bağlantıları ve “Have you met …?” uyarılarıyla tanışmaları hızlandır.</p>
+    </div>
+  </div>
+</section>
+
+{% endblock %}
+
